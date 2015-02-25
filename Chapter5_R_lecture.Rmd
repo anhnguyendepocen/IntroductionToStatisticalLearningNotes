@@ -1,0 +1,90 @@
+---
+title: 'Chapter 5: R lecture'
+author: "Loren Serfass"
+date: "02/24/2015"
+output: html_document
+---
+
+```{r}
+require(ISLR)
+require(boot)
+```
+
+# Cross-validation
+
+```{r}
+?cv.glm
+dim(Auto)
+plot(mpg ~ horsepower, data=Auto)
+glm.fit <- glm(mpg ~ horsepower, data=Auto) # This actually fits a LINEAR MODEL. (no family argument)
+```
+
+Leave-one-out CV.  Brute force makes `r dim(Auto)[1] - 1` models.
+
+```{r}
+# cv.glm(Auto, glm.fit)$delta # very slow brute force (does not use formula on page 180)
+```
+
+Using the "diagonal of the hat matrix."  Very quick!
+
+```{r}
+loocv <- function(fit) {
+    hat.thing <- lm.influence(fit)$h
+    mean((residuals(fit)/(1-hat.thing))^2)
+}
+loocv(glm.fit)
+```
+
+Trying out polynomials of different degrees. Note use of `poly` function.
+
+```{r}
+cv.error <- numeric(5)
+degree <- 1:5
+for (i in degree) {
+    fit <- glm(mpg ~ poly(horsepower,i), data=Auto)
+    cv.error[i] <- loocv(fit)
+}
+plot(degree, cv.error, type='b')
+```
+
+k-fold cross-validation using 10 folds.
+
+```{r}
+k <- 10
+cv.error.k <- numeric(5)
+for (d in degree) {
+    fit <- glm(mpg ~ poly(horsepower,d), data=Auto)
+    cv.error.k[d] <- cv.glm(Auto, fit, K=k)$delta[1]
+}
+plot(degree, cv.error, type='b')
+lines(degree, cv.error.k, type='b', col='red')
+```
+
+# Bootstrap in R
+
+Investment example from book. You have two investments, each with a variance.
+
+Optimal formula for minimum risk:
+
+alpha = (var(y) - cov(x,y))/(var(x) + var(y) - 2*cov(x,y))
+
+Question: what is the sampling distribution of alpha?
+
+```{r}
+alpha <- function(x,y) {
+    vx <- var(x)
+    vy <- var(y)
+    cxy <- cov(x,y)
+    (vy - cxy) / (vx + vy - 2*cxy)
+}
+alpha(Portfolio$X, Portfolio$Y)
+alpha.f <- function(data, index) {
+    with(data[index,], alpha(X,Y))
+}
+alpha.f(Portfolio,1:100) # The original alpha
+set.seed(1)
+alpha.f(Portfolio,sample(1:100,replace=T)) # the alpha from one bootstrap resampling
+boot.out <- boot(Portfolio, alpha.f, R=1000) # doing 1000 bootstrap resamplings
+plot(boot.out) # two plots of the 1000 alpha statistics: histogram, and qqnorm
+```
+
