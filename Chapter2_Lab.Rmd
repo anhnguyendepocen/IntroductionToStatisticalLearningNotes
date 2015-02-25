@@ -1,0 +1,51 @@
+---
+title: "Chapter 2 Lab"
+author: "Loren Serfass"
+date: "12/30/2014"
+output: html_document
+---
+
+Making a matrix (I'm less familiar with this):
+
+```{r}
+# numbers read down by default. specify nrow, ncol, or both.
+matrix(1:6, nrow=3)
+matrix(1:8, ncol=4)
+# numbers reading across:
+matrix(1:10, nrow=5, byrow = T)
+# using dimnames:
+(blah <- matrix(1:4, nrow=2, dimnames=list(c('x1','x2'),
+                                           c('y1','y2'))))
+blah['x1',] # OK whoop-dee-doo we can refer to rows and columns by dimname
+```
+
+Use set.seed(number) to set a random number seed.
+Other functions demonstrated: rnorm(), mean(), var(), pdf(), plot(), seq()...
+
+Demonstrating outer() and contour():
+
+```{r}
+outer(1:4, 8:9) # multiplying a column vector by a row vector?
+outer(1:4, 8:9, FUN="+")
+x <- seq(-pi, pi, length=100)
+y <- x
+f <- outer(x, y, function(x, y) cos(y) / (1 + x^2))
+contour(x,y,f, main="cos(y) / (1 + x^2)")
+contour(x,y,f, nlevels=45)
+
+fa <- (f - t(f))/2 # not sure what this does
+contour(x, y, fa)
+
+image(x,y,f)
+image(x,y,f, col=rainbow(100))
+image(x,y,f, col=topo.colors(100))
+persp(x,y,f)
+persp(x,y,f, phi=90) # looking straight down
+persp(x,y,f, theta=30, phi=50)
+```
+
+I pretty much know the indexing and loading data parts.
+
+Additional graphical and numerical summaries: plot, hist, attach, pairs, identify,
+and summary are covered.
+

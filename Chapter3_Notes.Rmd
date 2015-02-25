@@ -1,0 +1,13 @@
+---
+title: "Chapter 3 Notes"
+author: "Loren Serfass"
+date: "12/30/2014"
+output: html_document
+---
+
+```{r}
+ads <- read.csv('Advertising.csv')
+ads <- ads[,-1]
+mod <- lm(Sales ~ TV*Radio, data=ads)
+```
+

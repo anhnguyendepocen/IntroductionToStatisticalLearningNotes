@@ -1,0 +1,212 @@
+---
+title: "Chapter 2 Notes"
+author: "Loren Serfass"
+date: "12/25/2014"
+output: html_document
+---
+
+```{r}
+library('ISLR')
+library('MASS')
+library('ggplot2')
+library('plyr')
+```
+
+```{r}
+ads <- read.csv('Advertising.csv')
+ads <- ads[,-1] # what's up with that annoying first column
+
+myfun <- function(x, y) {
+    points(x, y, pch=20, cex=.3, col=rgb(0,0,0,.3)) # transparent points!
+    m <- lm(y ~ x)
+    abline(m$coefficients[1], m$coefficients[2], col='red')
+    # abline(reg=lm(y ~ x), col='red') # would also work
+    text(min(x), y=max(y), adj=c(0,1),
+         paste('cor = ', round(cor(x,y), digits=3), '\n',
+               'slope = ', round(m$coefficients[2],digits=3), sep=''))
+}
+pairs(ads, lower.panel=myfun, upper.panel={}) # pch=1, cex=.7, panel=myfun)
+```
+
+## My playing around
+
+Plotting test-set average squared deviation against a smoothing parameter
+
+Here's my invented function we'll be trying to fit:
+
+```{r}
+f <- function(x) { sin(x) }
+n <- 100
+eps.sd <- .3
+x <- seq(from=0, to=2*pi, length.out = n)
+y <- f(x) + rnorm(n,sd=eps.sd)
+plot(x,y, main="data with original f (the sin function)")
+curve(sin, from=0, to=2*pi, add=T)
+```
+
+Fitting the function with spline, with varying smoothing parameters.  Notice how sp = 0.8 gets the closest to
+the original sine curve.
+
+```{r}
+plot(x,y, main="smoothing parameters:\n0.1 (red), 0.4 (green), 0.8 (purple), and 1 (blue)")
+curve(sin, 0, 2*pi, add=T, lty=4, lwd=3)
+lines(predict(smooth.spline(x,y, sp=.1),seq(0,2*pi,length=300)), col='red')
+lines(predict(smooth.spline(x,y, sp=.4),seq(0,2*pi,length=300)), col='darkgreen')
+lines(predict(smooth.spline(x,y, sp=.8),seq(0,2*pi,length=300)), col='purple')
+lines(predict(smooth.spline(x,y, sp=1),seq(0,2*pi,length=300)), col='blue')
+```
+
+
+```{r}
+training.size <- 90
+samp <- sample(n, size=training.size)
+
+try.smoothing.parameter <- function(sp) {
+    ss <- smooth.spline(x[samp],y[samp],spar = sp)
+    training.error <- sum((ss$yin - ss$y)^2)/training.size
+    test.predictions <- predict(ss, x[-samp])
+    test.error <- sum((test.predictions$y - y[-samp])^2)/(n-training.size)
+    data.frame(sp, training.error, test.error)
+}
+pars <- seq(from=0,to=1,by=.02)
+learning.curves <- adply(.data=pars, .margins=1, .fun=try.smoothing.parameter)
+ggplot(learning.curves, aes(x=sp)) + geom_line(aes(y=training.error),color='green') +
+    geom_line(aes(y=test.error),color='red')
+```
+
+## k-fold cross-validation to find best smoothing parameter of a smoothing spline
+
+```{r}
+# TODO: for use in k-fold cross-validation function
+get.group.sizes <- function(n, k) {
+    ceil <- ceiling(n/k)
+    num.to.deduct <- ceil*k - n
+    sizes <- rep(ceil, times=k)
+    if (num.to.deduct > 0) sizes[1:num.to.deduct] <- ceil - 1
+    sizes
+}
+
+# k-fold cross validation
+# TODO: make this a function of k and everthing else (pars, function, data, model, etc.)
+k <- 10 # do not use this method for large k.
+pars <- seq(from=0,to=1,by=.02)
+
+samp <- sample(n) # randomly order an index to the data points
+sz <- get.group.sizes(n, k)
+k.fold.cv.spline <- function(sp) {
+    start <- 1
+    training.error <- 0
+    test.error <- 0
+    for (i in 1:k) {
+        test.set <- start:(start + sz[i] - 1)
+        ss <- smooth.spline(x[samp[-test.set]], y[samp[-test.set]], spar=sp)
+        training.error <- training.error + sum((ss$yin - ss$y)^2)
+        test.predictions <- predict(ss, x[samp[test.set]])
+        test.error <- test.error + sum((test.predictions$y - y[samp[test.set]])^2)
+        start <- start + sz[i]
+    }
+    training.error <- training.error / (n * (k-1))
+    test.error <- test.error / n
+    data.frame(sp, training.error, test.error)
+}
+error.rates <- adply(.data=pars, .margins=1, .fun=k.fold.cv.spline)
+best.sp.index <- which.min( error.rates$test.error)
+ggplot(error.rates, aes(x=sp)) + geom_line(aes(y=training.error),color='green') +
+    geom_line(aes(y=test.error),color='red') + theme_minimal() +
+    geom_hline(yintercept=sum((y - f(x))^2)/n, linetype='dashed') +
+    geom_point(x=pars[best.sp.index], y=error.rates$test.error[best.sp.index])
+```
+
+The smoothing parameter that produces the closest fit on the test data, using cross-validation:
+
+```{r}
+pars[ which.min( learning.curves$test.error)]
+```
+
+
+## Back to chapter 2 notes...
+
+Plotting Income vs Education, with a loess smoother (not the f the data were simulated from):
+
+```{r}
+income <- read.csv('Income2.csv')
+income <- income[,-1]
+ggplot(income, aes(Education, Income)) + geom_point(color='darkred') + geom_smooth(span=.9) + theme_minimal()
+```
+
+### Prediction
+
+Getting an f-hat estimate of f.
+
+### Inference
+
+Estimating f, but also answering such questions as: Which predictors are assoc w/ the response?
+What is the relationship between the response and each of the predictors?
+Can the relationship be summarized as a linear equation, or is the relationship more complicated?
+
+Some models are more appropriate for prediction than inference, and vice versa.
+
+## Parametric methods of model-building
+
+2 steps:
+
+1: make assumption (e.g., linearity)
+
+2: fit the training data, choosing parameters that [minimize a cost function?]
+
+More *flexible* models estimate a greater number of parameters, and can result in *overfitting*.
+
+## Non-Parametric methods
+
+E.g. thin-plate spline.
+Non-parametric methods make no "explicit" assumptions.
+"Seek an estimate neither too rough nor wiggly."
+*They require a large number of observations.*
+
+## Flexibility vs interpretability
+
+Interpretable models are more useful for inference.
+
+
+Continuum from high interpret / low flexibility to the opposite:
+
+lasso, subset selection
+
+least squares
+
+generalized additive models, trees
+
+bagging, boosting,
+
+support vector machines
+
+## Supervised vs unsupervised
+
+Clustering (un-supervised)
+
+## Regression vs classification
+
+Classification: when the output variable in a bunch of classes.
+
+# Assessing model accuracy
+
+## Measuring the quality of fit
+
+MSE (mean squared error), minimized on the test set.  **Others?**
+
+## The bias-variance trade-off
+
+$E((y_{0} - \hat{f}(x_{0}))^2) = Var(\hat{f}(x_{0})) + [Bias(\hat{f}(x_{0}))]^2 + Var(\epsilon)$
+
+The left-hand side (and the right) is the *expected test MSE*.
+
+*Variance*: the amount by which $\hat{f}$ would change if we estimated it
+under different training sets.  Ideally $\hat{f}$ would not vary much
+when estimated using different training sets.  If it does, the learning method has
+*high variance*.  More flexible methods have higher variance.
+
+*Bias*: the error introduced by reducing a "complicated real-life situation" to a simple
+model.
+
+When f is unknown, it is impossible to calculate the expected test MSE, bias, and variance (?).
+Cross-validation allows you to estimate the test MSE.

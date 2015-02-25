@@ -1,0 +1,85 @@
+---
+title: "Title"
+author: "Loren Serfass"
+date: "01/03/2015"
+output: html_document
+runtime: shiny
+---
+
+```{r}
+library('ggplot2')
+```
+
+# dynamic plot fooling around
+
+```{r}
+set.seed(1000)
+f <- function(x) { sin(x) }
+n <- 150
+from <- 0
+to <- 4*pi
+sd.eps <- .3
+x <- seq(from=from, to=to, length=n)
+test <- rep(F, times=n)
+test[sample(n, size=floor(n/3))] <- T
+df <- data.frame(x, y = f(x) + rnorm(n, sd=sd.eps), test)
+```
+
+```{r echo=F, message=F}
+my.func <- function(sp) {
+    ss <- smooth.spline( df$x[!test], df$y[!test], spar=sp)
+    data.frame(sp        = sp,
+               mse.train = mean((df$y[!test] - predict(ss, df$x[!test])$y)^2),
+               mse.test  = mean((df$y[test] - predict(ss, df$x[test])$y)^2))
+}
+require(plyr)
+# make data.frame of curve data:
+curves <- adply(seq(0,1,length=201), 1, my.func)
+# make a plot of the data:
+p.curves <- ggplot(curves, aes(x=sp)) + geom_line(aes(y=mse.train),color='blue') +
+                geom_line(aes(y=mse.test),color='red') + theme_minimal()
+```
+
+```{r echo=F, message=F}
+sliderInput("sp", label=h3("smoothing parameter"), min=0, max=1, value=.5)
+```
+
+```{r echo=F, message=F}
+ss <- reactive({ smooth.spline(df$x[!df$test], df$y[!df$test], spar=input$sp) })
+curvy <- reactive({ predict(ss(), seq(from=from, to=to, length=100)) })
+pred <- reactive({predict(ss(), df$x)})
+
+biggie <- reactive({
+    ggplot(df, aes(x,y)) + geom_point(aes(col=test), size=2) +
+    scale_color_manual(values=c('blue', 'red')) + theme_minimal() + ylim(-1.5, 1.5) +
+    guides(color=F) + annotate(geom='line', x=curvy()$x, y=curvy()$y, color='blue') +
+    annotate(geom='segment', x=pred()$x[!df$test], xend=pred()$x[!df$test],
+             y=df$y[!df$test], yend=pred()$y[!df$test], col='blue') +
+    annotate(geom='segment', x=pred()$x[df$test], xend=pred()$x[df$test],
+             y=df$y[df$test], yend=pred()$y[df$test], col='red')
+    })
+
+resids.train <- reactive({
+    data.frame(x=1:(n-floor(n/3)), train=sort(abs(df$y[!df$test] - pred()$y[!df$test])))
+    })
+resids.test <- reactive({
+    data.frame(x=1:floor(n/3), test=sort(abs(df$y[df$test] - pred()$y[df$test])))
+    })
+
+p2 <- reactive({
+    ggplot(resids.train(), aes(x, train)) + geom_segment(aes(xend=x, yend=0),color='blue') +
+    ylim(0,3) +
+    theme_minimal()
+    })
+p3 <- reactive({
+    ggplot(resids.test(), aes(x, test)) + geom_segment(aes(xend=x, yend=0),color='red') +
+    ylim(0,3) +
+    theme_minimal()
+    })
+```
+
+```{r echo=F, message=F}
+renderPlot({p.curves + geom_vline(xintercept=input$sp)},width = 400,height=200)
+library('gridExtra')
+renderPlot({grid.arrange(biggie(),p2(),p3(),ncol=3,widths=c(5,2,1))})
+```

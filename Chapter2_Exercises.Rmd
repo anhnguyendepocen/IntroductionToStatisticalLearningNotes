@@ -1,0 +1,282 @@
+---
+title: "Chapter 2 Exercises"
+author: "Loren Serfass"
+date: "12/28/2014"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+```
+
+
+# Conceptual
+
+1. For each of parts (a) through (d), indicate whether we would generally
+expect the performance of a flexible statistical learning method to be
+better or worse than an inflexible method. Justify your answer.
+
+(a) The sample size n is extremely large, and the number of predic-
+tors p is small. **Flexible.  The text says that flexible methods rely on large samples.**
+
+(b) The number of predictors p is extremely large, and the number
+of observations n is small.  **Inflexible, same reason as above.**
+
+(c) The relationship between the predictors and response is highly
+non-linear. **Flexible?  If the true f is highly non-linear, then $\hat{f}$ had better be non-linear as well.  Otherwise we have high bias.**
+
+(d) The variance of the error terms, i.e. [????], is extremely
+high.
+
+
+2. Explain whether each scenario is a classification or regression prob-
+lem, and indicate whether we are most interested in inference or pre-
+diction. Finally, provide n and p.
+
+(a) We collect a set of data on the top 500 firms in the US. For each
+firm we record profit, number of employees, industry and the
+CEO salary. We are interested in understanding which factors
+affect CEO salary.  **Regression (salary), inference. n = 500, p = 3.**
+
+(b) We are considering launching a new product and wish to know
+whether it will be a success or a failure. We collect data on 20
+similar products that were previously launched. For each prod-
+uct we have recorded whether it was a success or failure, price
+charged for the product, marketing budget, competition price,
+and ten other variables.  **Classification, prediction, n = 20, p = 13.**
+
+(c) We are interesting in predicting the % change in the US dollar in
+relation to the weekly changes in the world stock markets. Hence
+we collect weekly data for all of 2012. For each week we record
+the % change in the dollar, the % change in the US market,
+the % change in the British market, and the % change in the
+German market. **Regression, prediction, n = ~50, p = 3.**
+
+3. **sketch plots**
+
+4. You will now think of some real-life applications for statistical learn-
+ing.
+
+(a) Describe three real-life applications in which classification might
+be useful. Describe the response, as well as the predictors. Is the
+goal of each application inference or prediction? Explain your
+answer.
+
+(b) Describe three real-life applications in which regression might
+be useful. Describe the response, as well as the predictors. Is the
+goal of each application inference or prediction? Explain your
+answer.
+
+(c) Describe three real-life applications in which cluster analysis
+might be useful.  **.**
+
+# Applied
+
+8.
+
+```{r}
+college <- read.csv('College.csv')
+row.names(college) <- college[,1]
+college <- college[,-1]
+names(college)
+print(sum(is.na(college[,]))) # No NAs
+summary(college)
+pairs(college[,1:10], pch=20, cex=.5, col=rgb(0,0,0,0.15)) # pairs plot with transparency
+plot(college$Outstate ~ college$Private)
+ggplot(college, aes(Private, Outstate)) + geom_boxplot()
+college$Elite <- "not Elite"
+college$Elite[ college$Top10perc > 50] <- "Elite"
+college$Elite <- as.factor(college$Elite)
+summary(college$Elite)
+ggplot(college, aes(Elite, Outstate)) + geom_boxplot()
+ggplot(college, aes(Accept / Apps)) + geom_histogram(aes(y=..density..)) +
+    facet_grid(Elite ~ .) +
+    ggtitle(label = "Proportion of applicants accepted, for elite and non-elite colleges")
+```
+
+9.
+
+```{r}
+auto <- read.csv('Auto.csv', na.strings='?')
+cc <- complete.cases(auto)
+sum(!cc) # 5 rows have missing horsepower
+auto <- auto[cc,]
+str(auto)
+# auto$cylinders <- factor(auto$cylinders) # not sure whether should be numeric or factor
+auto$origin <- factor(auto$origin)
+```
+
+Types of predictors (I assume we are predicting mpg):
+
+Quantitative: cylinders (?), displacement, horsepower, weight, acceleration, year
+
+Qualitative: cylinders, origin, name
+
+Cylinders, Displacement, Horsepower, and Weight are all positively correlated
+with each other but negatively with MPG.  It looks like all of the predictors should
+be investigated to see whether they should be included in a model.
+
+```{r}
+# shows the range and mean of each quantitative predictor
+summary(auto[,c(3,4,5,6,7)])[c(1,4,6),]
+pairs(auto[,-9], lower.panel = {}, pch=20, cex=.5, col=rgb(0,0,0,.25))
+```
+
+Displacement, weight, hp, horsepower are skewed.  Mpg and Acceleration are roughly normal.
+
+```{r}
+qplot(displacement, data=auto, binwidth=50) # use "binwidth=50" to change
+qplot(weight, data=auto, binwidth=150)
+qplot(horsepower, data=auto, binwidth=20)
+qplot(mpg, data=auto, binwidth=5)
+qplot(acceleration, data=auto, binwidth=2)
+```
+
+Trying out some variable selection methods.
+I found these [here](http://www.statmethods.net/stats/regression.html).
+First, exhaustive search using "leaps" package:
+
+```{r}
+library(leaps)
+# Regress on all variables except mpg and name.  Only 2^8 = 256 models!
+leaps <- regsubsets(mpg ~ . - name, data=auto, method='exhaustive')
+summary(leaps)
+plot(leaps, scale='r2')
+leaps$rss
+```
+
+Hm, that was interesting.  It told me which was the best model for each
+subset size, but didn't tell me how far to go.  (TODO: maybe that information
+is embedded in the leaps object?)  Next let's try additive selection.
+
+```{r}
+fit <- lm(mpg ~ . - name, data=auto)
+require(MASS)
+step <- stepAIC(fit, direction='both')
+step$anova # the "best" model includes everything but acceletation
+
+lower <- lm(mpg ~ 1, data=auto)
+upper <- lm(mpg ~ . - name, data=auto)
+step <- stepAIC(lower,
+                scope=list(upper=upper, lower = lower),
+                direction='forward')
+step$anova
+```
+
+A couple different selection methods arrive at the same model:
+all the predictors included except for acceleration.  How about
+I work with that model for a bit:
+
+```{r}
+all.but.accel <- lm(mpg ~ . - name - acceleration, data=auto)
+```
+
+Well, it looks as if "cylinders" is not significant after including
+the other predictors.  Let's try without cylinders as well.
+
+```{r}
+minus.cylinders <- lm(mpg ~ displacement + horsepower + weight + year + origin, data=auto)
+```
+
+Everything is significant in this model.
+
+```{r}
+anova(all.but.accel, minus.cylinders) # TODO: interpret this.
+```
+
+Trying k-fold cross validation on the minus.cylinders model:
+
+```{r}
+require('DAAG')
+cv.lm(df=auto[,-9], form.lm = minus.cylinders, m = 10) # gives error becuase of formula
+mod <- lm(mpg ~ displacement + horsepower + weight + year + origin, data=auto)
+```
+
+The cv.lm function divides the data randomly into folds. By turn, each fold is predicted
+using a model regressed on the other folds.  I believe this gives the cvpred column.
+The Predicted column is predictions based on all the data?
+
+```{r}
+huh <- cv.lm(df=auto[,-9], form.lm = mod, m = 5, printit=F)
+sum((huh$mpg - huh$cvpred)^2)/dim(huh)[1] # the average mean-squared-error of cross-validation?
+```
+
+10. Housing values in Suburbs of Boston.  TODO: answer their questions.
+
+The rows appear to represent "suburbs," or neighborhoods, of Boston.
+
+```{r}
+library(MASS)
+data(Boston)
+str(Boston)
+# ?Boston
+dim(Boston)
+# pairs(Boston)
+pairs(Boston[,c(1,2,3,6,8,9,10,11,13,14)], lower.panel = {},
+      pch=20, cex=.5, col=rgb(0,0,0,.3))
+```
+
+Something inexplicable.
+
+The help, found by "?Boston", says that the "black" variable is
+1000*(Bk - 0.63)^2, where Bk is the proportion of blacks in the town. So, why do
+most of them have a Bk greater than 1??  "black" is exactly 396.9 (the highest value)
+for exactly 121 suburbs. I just can't figure out their crazy transformation of this variable.
+
+```{r}
+Boston$Bk <- 0.63 + sqrt(Boston$black/1000)
+hist(Boston$Bk, breaks=50)
+qplot(black, data=Boston, binwidth=1)
+with(Boston, sum(black == 396.9))
+```
+
+The crime rate is highly, highly skewed.
+
+```{r}
+hist(Boston$crim)
+crime.ridden <- Boston[ Boston$crim > 30, ] # not sure what I'm seeing here
+```
+
+372 of the 506 Boston suburbs have zn = 0 (zn is the proportion of residential land
+zoned for lots over 25,000 sq ft). The remaining 134 suburbs have skewed zone as well.
+
+```{r}
+hist(Boston$zn[ Boston$zn != 0])
+summary(Boston$crim[ Boston$zn != 0]) # when zn != 0, crime rate is small, still skewed
+ggplot(Boston, aes(zn, crim)) + geom_point(alpha=.3) # the crime happens in zn = 0 neighborhoods
+```
+
+There are 132 suburbs (about 26%) that have *exactly* 18.1 for "indus" (proportion
+of non-retail business acres per town).  And hold it... the same 132 suburbs have
+identical values in several other variables as well.  This suggests to me that during
+data collection or cleaning, these values were averaged together or otherwise botched.
+Wouldn't this cause problems for analysis?  Should these values be treated as missing?
+
+```{r}
+ # start with these 132:
+with(Boston, sum(indus == 18.1))
+# still those 132!
+sum(Boston$rad == 24) # exactly 132
+sum(Boston$tax == 666) # exactly 132
+sum(Boston$ptratio == 20.2) # 140, nearly 132.  Really, exact equality for a decimal value?
+with(Boston, sum((indus == 18.1) &
+                     (zn == 0) & # (actually this is almost to be expected)
+                     (rad == 24) &
+                     (tax=666) &
+                     (ptratio=20.2)))
+```
+
+A pretty histogram:
+
+```{r}
+qplot(indus, data=Boston, binwidth=.1)
+```
+
+Some of the variables should really be logged.  With logged dis and crim, a negatively-sloped
+linear model would work well.
+
+```{r}
+ggplot(Boston, aes(log(dis), log(crim))) +
+    geom_point(alpha=.3) + geom_smooth(method='lm')
+    ggtitle('log(crim) vs log(dis)')
+```

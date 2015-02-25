@@ -1,0 +1,14 @@
+---
+title: "blah"
+author: "Loren Serfass"
+date: "01/02/2015"
+output: html_document
+runtime: shiny
+---
+
+```{r}
+library('ggvis')
+p <- ggvis(mtcars, x = ~wt, y = ~mpg)
+layer_points(p)
+```
+

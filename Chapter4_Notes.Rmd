@@ -1,0 +1,68 @@
+---
+title: "Chapter 4 Notes: Classification"
+author: "Loren Serfass"
+date: "02/02/2015"
+output: html_document
+---
+
+```{r}
+library(knitr)
+opts_chunk$set(warning=FALSE, prompt=FALSE, message=FALSE)
+library(ggplot2)
+theme_set(new = theme_minimal())
+```
+
+
+Predicting credit card default.
+
+```{r}
+require(ISLR)
+data(Default)
+str(Default)
+ggplot(Default, aes(balance, income)) +
+    geom_point(aes(color=default), alpha=.3)
+# TODO: remove legends:
+ggplot(Default, aes(default, income)) + geom_boxplot(aes(fill=default))
+ggplot(Default, aes(default, balance)) + geom_boxplot(aes(fill=default))
+```
+
+Fitting a `glm` to `balance`:
+
+```{r}
+fit <- glm(default ~ balance, data=Default, family=binomial())
+
+# 0 = no, 1 = yes (defaulted)
+
+
+# logit <- function(x) { log(x / (1-x))}
+logistic <- function(x) { 1 / (1 + exp(-x) ) }
+bal.seq <- with(Default, seq(min(balance), max(balance), length=100))
+# prob <- logistic(predict(fit, data.frame(balance=bal.seq)))
+prob <- predict(fit, data.frame(balance=bal.seq), type='response')
+```
+
+Trying k nearest neighbors:
+
+```{r}
+library(FNN)
+# Default$.num <- as.numeric(Default$default)-1 # TODO: is this necessary?
+k.fit.50 <- knn.reg(Default$balance, y=as.numeric(Default$default)-1, k=50)
+k.fit.200 <- knn.reg(Default$balance, y=as.numeric(Default$default)-1, k=200)
+DF <- data.frame(balance=Default$balance, k50=k.fit.50$pred, k200=k.fit.200$pred)
+DF <- DF[ order(DF$balance),]
+
+with(Default,plot(balance, as.numeric(default)-1,pch='|',col=rgb(0,0,0,.1)))
+lines(bal.seq, prob,lwd=2)
+with(DF, lines(balance, k50, col='darkblue'))
+with(DF, lines(balance, k200, col='brown'))
+```
+
+Student
+
+```{r}
+# Students seem to have higher default rates:
+with(Default, prop.table(table(student, default), margin=1))
+# Ayuh
+with(Default, chisq.test(table(student, default)))
+```
+
