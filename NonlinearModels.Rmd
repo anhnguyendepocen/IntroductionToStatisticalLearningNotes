@@ -1,0 +1,185 @@
+---
+title: "Nonlinear models"
+author: "Loren Serfass"
+date: "03/07/2015"
+output: html_document
+---
+
+```{r}
+require(ggplot2)
+theme_set(new = theme_minimal())
+require(ISLR)
+```
+
+# Polynomials
+
+## Polynomial linear regression
+
+A 4-degree polynomial on `age`.  The `poly` function produces orthogonal
+polynomials, meaning the variables produced are not correlated. This means
+that the significance of each variable in the model is not affected by removing
+any of the others. You can test each variable separately.
+
+```{r}
+# attach(Wage)
+mod.poly4 <- lm(wage ~ poly(age,4), data=Wage)
+summary(mod.poly4)
+```
+
+My plot:
+
+```{r}
+p <- ggplot(Wage, aes(age, wage)) + geom_point(size=1.5, alpha=.3)
+p + geom_line(aes(y=predict(mod.poly4,Wage)),color='blue')
+```
+
+Their plot (se bands with `matlines`):
+
+```{r}
+agelims <- range(Wage$age)
+age.seq <- seq(agelims[1], agelims[2]) # "by" defaults to 1
+preds <- predict(mod.poly4, newdata=list(age=age.seq), se=T)
+se.bands <- with(preds, cbind(fit - 1.96*se.fit, fit + 1.96*se.fit))
+plot(Wage$age, Wage$wage, pch=19, cex=.3, col=rgb(0,0,0,.2))
+lines(age.seq, preds$fit, col='blue', lwd=2)
+matlines(age.seq, se.bands, col='blue', lty=2)
+```
+
+Fitting the 4th-order polynomial directly. The coefficients are different from
+the first model because `poly` de-correlates the polynomials. "We are using a different
+basis for representing the polynomials." For this second model,
+removing a term will change the significance of the other terms.
+
+```{r}
+mod.poly4.2 <- lm(wage ~ age + I(age^2) + I(age^3) + I(age^4), data=Wage)
+summary(mod.poly4.2)
+```
+
+But the predicted values are the same:
+
+```{r}
+plot(fitted(mod.poly4), fitted(mod.poly4.2))
+```
+
+When using `poly` on the only predictor in the model, the coefficients and p-values
+for each generated term are separate. But if another variable is in the model, this
+no longer works, and you use `anova` to compare nested models.
+
+```{r}
+fit.a <- lm(wage ~ education, data=Wage)
+fit.b <- lm(wage ~ education + age, data=Wage)
+fit.c <- lm(wage ~ education + poly(age,2), data=Wage)
+fit.d <- lm(wage ~ education + poly(age,3), data=Wage)
+anova(fit.a, fit.b, fit.c, fit.d)
+```
+
+How to interpret the output above: certainly `age` and `age^2` are needed in the
+model with education, but not necessarily `age^3`.
+
+## Polynomial logistic regression
+
+We create a binary response variable from `wage`: big earners are 1, others 0.
+
+```{r}
+logmod.poly3 <- glm(I(wage > 250) ~ poly(age,3), data=Wage, family=binomial)
+summary(logmod.poly3)
+# type='response' has to be the most opaque way of saying we are doing classification
+preds.prob <- predict(logmod.poly3, newdata=list(age=age.seq), type='response')
+```
+
+If you want standard error bands, it seems you have to do things manually.
+Do the calculations "on the logit scale" (predictions not probabilities between
+0 and 1), then apply logistic function
+$$p = \frac{e^\eta}{1 + e^\eta} = \frac{1}{1 + e^{-\eta}}$$
+
+```{r}
+preds <- predict(logmod.poly3, newdata=list(age=age.seq),se=T) # make predictions on logit scale
+se.bands <- with(preds, fit + cbind(fit=0, lower=-1.96*se.fit, upper=1.96*se.fit)) # tricky
+logistic <- function(x) { 1 / (1 + exp(-x)) }
+prob.bands <- logistic(se.bands) # transform predictions and se bands to probability scale
+matplot(age.seq, prob.bands, col='blue', type='l',
+        lwd=c(2,1,1), lty=c(1,2,2), ylim=c(0,.1))
+with(Wage, points(jitter(age), ifelse(wage > 250, .1, 0), pch='|', cex=.5,col=rgb(.5,0,0,.3)))
+```
+
+Let's just check something.
+
+```{r}
+sum(prob.bands[,1])/length(age.seq) # "integral" over estimated probability curve
+sum(Wage$wage > 250) / nrow(Wage) # actual probability
+```
+
+
+# Splines
+
+Looking at cubic splines. The `bs` function generates a "B-spline basis matrix for a polynomial spline."
+**I don't know what a B-spline basis matrix is.**
+
+```{r}
+require(splines)
+my.knots <- c(25,40,60)
+dim(bs(Wage$age, knots=my.knots)) # bs produces a  matrix with some number of columns I don't understand
+# a model
+mod.cubic.spline <- lm(wage ~ bs(age, knots = my.knots), data=Wage)
+
+p2 <- p + annotate(geom='line',
+                   x=age.seq, y=predict(mod.cubic.spline, newdata=list(age=age.seq)),
+                   color='darkgreen') +
+          geom_vline(xintercept=my.knots, linetype=2)
+p2
+```
+
+Looking at smoothing splines.  First, seting `df` explicitly:
+
+```{r}
+mod.ss <- smooth.spline(Wage$age, Wage$wage, df=16)
+blah <- predict(mod.ss, newdata=list(age=age.seq))
+# p + annotate(geom='line', x=blah$x, y=blah$y)
+```
+
+Now using leave-one-out cross validation to select the smoothing parameter
+for us automaticically:
+
+```{r}
+mod.loo <- smooth.spline(Wage$age, Wage$wage, cv=TRUE) # I can't find LOO in documentation
+p2 + annotate(geom='line', x=blah$x, y=blah$y, color='red') +
+    annotate(geom='line', x=mod.loo$x, y=mod.loo$y, color='purple')
+```
+
+# Generalized Additive Models
+
+```{r}
+require(gam)
+gam1 <- gam(wage ~ s(age, df=4) + s(year, df=4) + education, data=Wage)
+par(mfrow=c(1,3))
+plot(gam1,se=T)
+
+gam2 <- gam(I(wage>250) ~ s(age, df=4) + s(year, df=4) + education, data=Wage, family=binomial)
+plot(gam2,se=T)
+```
+
+Adding a linear term for year. The model with spline on `year` is no better than the one
+with linear term on `year`.
+
+```{r}
+gam2a <- gam(I(wage>250) ~ s(age,df=4) + year + education, data=Wage,family=binomial)
+anova(gam2a, gam2, test="Chisq")
+```
+
+You can use `plot.gam` for models made with `lm`.
+
+```{r}
+par(mfrow=c(1,3))
+lm1 = lm(wage ~ ns(age, df=4) + ns(year,df=4) + education, data=Wage)
+plot.gam(lm1,se=T)
+```
+
+# R Quiz
+
+```{r}
+load('7.R.RData')
+plot(x,y)
+coef(lm(y ~ x))
+coef(lm(y ~ x + I(x^2)))
+```
+
