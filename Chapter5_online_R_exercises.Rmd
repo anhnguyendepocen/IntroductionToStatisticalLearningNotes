@@ -1,0 +1,60 @@
+---
+title: "Chapter 5 online R exercises"
+author: "Loren Serfass"
+date: "03/17/2015"
+output: html_document
+---
+
+```{r}
+load('5.R.RData')
+```
+
+Linear regression of `y` onto `X1` and `X2`:
+
+```{r}
+mod1 <- lm(y ~ X1 + X2, data=Xy)
+summary(mod1)
+matplot(Xy, type='l', verbose = T) # X1 is black, X2 is red, y is green
+abline(h=0)
+apply(Xy, 2, range)
+```
+
+Their explanation for why this standard error is too low:
+There is very strong autocorrelation between consecutive rows of the data matrix. Roughly speaking, we have about 10-20 repeats of every data point, so the sample size is in effect much smaller than the number of rows (1000 in this case).
+
+
+## Standard bootstrap to estimate Beta1:
+
+```{r}
+n.trials <- 10000
+beta1s <- numeric(n.trials)
+for (i in 1:n.trials) {
+    indices <- sample(nrow(Xy), replace=T)
+    beta1s[i] <- coef(lm(y ~ X1 + X2, data=Xy[indices,]))[2]
+}
+sd(beta1s) # 0.02939366, 0.02883711, 0.02904395
+```
+
+Their answer explanation (their estimate is 0.0274): When we do the i.i.d. bootstrap, we are relying on the original sampling having been i.i.d. That is the same assumption that screwed us up when we used lm.
+
+## Block bootstrap because this is a time series:
+
+Finally, use the block bootstrap to estimate s.e.(β^1). Use blocks of 100 contiguous observations, and resample ten whole blocks with replacement then paste them together to construct each bootstrap time series. For example, one of your bootstrap resamples could be:
+
+`new.rows = c(101:200, 401:500, 101:200, 901:1000, 301:400, 1:100, 1:100, 801:900, 201:300, 701:800)`
+
+`new.Xy = Xy[new.rows, ]`
+
+```{r}
+n.trials <- 10000
+beta1s.block.bs <- numeric(n.trials)
+indices <- numeric(1000) # the 1000 is nrow(Xy)
+for (i in 1:n.trials) {
+    blocks <- sample(seq(0,900,by=100), replace=T)
+    for (j in 0:9) { indices[100*j+1:100] <- blocks[j+1] + 1:100 }
+    beta1s.block.bs[i] <- coef(lm(y ~ X1 + X2, data=Xy[indices,]))[2]
+}
+sd(beta1s.block.bs) # 0.2001535, 0.1972061,  0.1985357
+```
+
+Their explanation: The block bootstrap does a better job of mimicking the original sampling procedure, because it preserves the autocorrelation.
