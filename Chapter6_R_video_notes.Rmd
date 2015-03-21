@@ -1,0 +1,130 @@
+---
+title: 'Chapter 6: Model Selection in R lecture notes'
+author: "Loren Serfass"
+date: "03/19/2015"
+output: html_document
+---
+
+```{r}
+library(ISLR)
+summary(Hitters)
+```
+
+Removing missing values:
+
+```{r}
+# Hitters <- Hitters[ complete.cases(Hitters), ]
+Hitters <- na.omit(Hitters)
+names(Hitters)
+```
+
+Best subset regression (predicting `Salary`). 
+Successive models are not necessarily nested!
+
+```{r}
+library(leaps)
+regfit.full <- regsubsets(Salary ~ ., data=Hitters, nvmax=19) # nvmax defaults to 8
+(reg.summary <- summary(regfit.full))
+names(reg.summary)
+plot(reg.summary$cp, xlab="Number of Variables", ylab="Cp", type='b')
+(the.min <- which.min(reg.summary$cp))
+points(the.min, reg.summary$cp[the.min], pch=20, col='red')
+```
+
+Plot method for `regsubsets`:
+
+```{r}
+plot(regfit.full, scale="Cp")
+coef(regfit.full,10)
+```
+
+# Forward stepwise regression
+
+Using `regsubsets` again but with `forward` option:
+
+```{r}
+regfit.fwd <- regsubsets(Salary ~ ., data=Hitters, nvmax = 19, method='forward')
+summary(regfit.fwd)
+plot(regfit.fwd, scale="Cp")
+```
+
+
+# Model Selection using a validation set
+
+```{r}
+dim(Hitters)
+set.seed(1)
+train <- sample(seq(263), 180, replace=F)
+# train
+regfit.fwd <- regsubsets(Salary ~ ., data=Hitters[train,], nvmax=19, method='forward')
+
+```
+
+Making predictions on the test set:
+
+```{r}
+val.errors <- numeric(19)
+x.test <- model.matrix(Salary ~ ., data=Hitters[-train,]) # ???
+for (i in 1:19) {
+    coefi <- coef(regfit.fwd, id=i)
+    pred <- x.test[,names(coefi)] %*% coefi # ???
+    val.errors[i] <- mean((Hitters$Salary[-train]-pred)^2)
+}
+plot(sqrt(val.errors), ylab='Root MSE', ylim=c(300,400),pch=19,type='b')
+points(sqrt(regfit.fwd$rss[-1]/180), col='blue', pch=19, type='b')
+legend('topright', legend=c('Training', 'Validation'), col=c('blue','black'),pch=19)
+```
+
+Writing a `predict` method for `regsubsets`:
+
+```{r}
+predict.regsubsets <- function(object, newdata, id, ...) {
+    form <- as.formula(object$call[[2]])
+    mat <- model.matrix(form, newdata)
+    coefi <- coef(object, id=id)
+    mat[,names(coefi)] %*% coefi
+}
+```
+
+# Model selection with cross-validation
+
+We will do 10-fold cross-validation. It's really easy!
+
+```{r}
+set.seed(11)
+folds <- sample(rep(1:10,length=nrow(Hitters)))
+table(folds) # groups are about equal
+cv.errors <- matrix(NA,10,19)
+for (k in 1:10) {
+    best.fit <- regsubsets(Salary ~ ., data=Hitters[folds != k,], nvmax=19, method='forward')
+    for(i in 1:19) {
+        pred <- predict(best.fit, Hitters[folds == k,], id=i) # our function from above
+        cv.errors[k,i] <- mean( (Hitters$Salary[folds==k]-pred)^2)
+    }
+}
+rmse.cv <- sqrt(apply(cv.errors,2,mean))
+plot(rmse.cv,pch=19,type='b')
+```
+
+# Ridge regression and the Lasso
+
+Trevor manages the package `glmnet` on CRAN. It does not use the formula language, but x (a matrix) and y (a vector).
+
+```{r}
+library(glmnet)
+x <- model.matrix(Salary ~ . - 1, data=Hitters)
+y <- Hitters$Salary
+```
+
+A ridge-regression model. Use `alpha=0` for ridge. (`alpha=1` is Lasso)
+
+```{r}
+fit.ridge <- glmnet(x,y,alpha=0)
+plot(fit.ridge, xvar='lambda', label=T)
+cv.ridge <- cv.glmnet(x,y,alpha=0)
+plot(cv.ridge)
+with(cv.ridge, matplot(x=log(lambda),
+                       data.frame(cvm, cvm+1.96*cvsd, cvm-1.96*cvsd, cvup, cvlo)))
+
+```
+
