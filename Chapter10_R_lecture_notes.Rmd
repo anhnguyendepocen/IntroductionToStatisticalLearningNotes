@@ -1,0 +1,158 @@
+---
+title: "Chapter 10 R lecture notes"
+author: "Loren Serfass"
+date: "03/21/2015"
+output: html_document
+---
+
+# Principal Components
+
+```{r}
+?USArrests # Arrests per 100,000 residents in 1973 in each state
+dimnames(USArrests)
+head(USArrests)
+pairs(USArrests)
+(m <- apply(USArrests,2,mean)) # means of the columns
+# apply(USArrests,2,var) # variances of the columns
+(s <- apply(USArrests,2,sd)) # sd of the columns
+```
+
+`Assault` has a larger mean and standard deviation than the other variables. We standardize the variables to do PCA.
+
+```{r}
+(pca.out <- prcomp(USArrests, scale=TRUE)) # scale=TRUE standardizes the variables
+plot(pca.out) # just plots the strength of each component
+summary(pca.out)
+biplot(pca.out, cex=.5)
+```
+
+The `biplot` shows that the horizontal axis (`PC1`) is mostly due to murder, assault, and rape. The states on the left, aligning with the red arrows, are high-crime. The vertical axis is mostly about whether the state has a high or low urban population.
+
+# Figuring out the prcomp object produced by the prcomp call
+
+I did this by myself.
+
+* `center` is the column means of the original data
+
+* `scale` is the column standard deviations of the original data
+
+* The columns of `rotation` are vectors of length 1. These are the principal components vectors.
+
+* `sdev` is the column-wise standard deviations of `x`
+
+```{r}
+names(pca.out)
+identical(pca.out$center, apply(USArrests,2,mean))
+identical(pca.out$scale, apply(USArrests,2,sd))
+apply(pca.out$rotation, 2, function(y) sqrt(sum(y^2))) # columns are vectors of length 1
+all.equal(pca.out$sdev, apply(pca.out$x, 2, sd))
+```
+
+The `rotation` matrix is the "loadings." For instance, the first column is the
+direction of the first principal component.
+
+# Recovering the original data (manually)
+
+I figured this out by myself.
+
+```{r}
+step1 <- pca.out$x %*% t(pca.out$rotation) # rotating to original axes
+step2 <- sweep(step1, 2, s, "*") # scaling the columns back to original standard deviations
+step3 <- sweep(step2, 2, m, "+") # centering the columns around their original means
+all.equal(as.matrix(USArrests), step3, check.attributes=F) # They have the same numbers and names
+```
+
+# Quiz questions :-(
+
+```{r}
+load('10.R.RData') # loads x, x.test, y, y.test
+# x is 300 obs of 200 vars
+# x.test is 1000 obs of 200 vars
+x.all <- rbind(x, x.test)
+hist(apply(x.all,2,sd)) # the standard deviations of the columns
+x.prcomp <- prcomp(x.all, scale=T)
+summary(x.prcomp) # This gives the cumulative proportion of variance explained
+vars = prcomp(rbind(x,x.test),scale=TRUE)$sdev^2 # can't figure out the relevance of this
+
+crap <- data.frame(x.prcomp$x)
+
+train <- 1:300
+n.pr.cp <- 10
+
+mod <- lm(y ~ ., data=crap[train,1:n.pr.cp]) # doesn't work when n.pr.cp = 1
+# pred.train <- predict(mod, newdata=crap[train,1])
+pred.train <- mod$coefficients[1] +
+    as.matrix(crap[train,1:n.pr.cp]) %*% mod$coefficients[-1]
+plot(crap[train,1], y)
+points(crap[train,1], pred.train)
+mean((y - pred.train)^2)
+pred.test <- mod$coefficients[1] +
+    as.matrix(crap[-train,1:n.pr.cp]) %*% mod$coefficients[-1]
+plot(crap[-train,1], y.test)
+points(crap[-train,1], pred.test)
+mean((y.test-pred.test)^2)
+
+get.errors <- function(n.pr.cp) { # n.pr.cp is the number of prin comp used
+    mod <- lm(y ~ ., data=crap[train,1:n.pr.cp])
+    pred.train <- mod$coefficients[1] +
+        as.matrix(crap[train,1:n.pr.cp]) %*% mod$coefficients[-1]
+    pred.test <- mod$coefficients[1] +
+        as.matrix(crap[-train,1:n.pr.cp]) %*% mod$coefficients[-1]
+    train.mse <- mean((y-pred.train)^2) # mean squared error
+    test.mse <- mean((y.test - pred.test)^2)
+    list(train.mse, test.mse)
+}
+get.errors(5)
+
+# regressing on the original data
+mod.hell <- lm(y ~ ., data=x)
+pred.test <- mod.hell$coefficients[1] +
+    as.matrix(x.test) %*% mod.hell$coefficients[-1]
+mean((y.test-pred.test)^2)
+```
+
+# K-means clustering
+
+Making fake data in 2 dimensions (for making pictures):
+
+```{r}
+mean.sep <- 4 # sort of like saying how much the means are separated
+set.seed(101)
+x <- matrix(rnorm(100*2),100,2) # starting with the random deviations from group means
+xmean <- matrix(rnorm(8,sd=mean.sep),4,2) # there will be 4 different means
+which <- sample(1:4, 100, replace=T) # assigning group to observation
+x <- x + xmean[which,] # adding the group means
+plot(x, col=which, pch=19) # the random data we have created
+```
+
+We know the "true" means, but won't tell them to the `kmeans` algorithm.
+
+```{r}
+km.out <- kmeans(x,4,nstart=15) # try it 15 times with 15 different random starts
+km.out
+plot(x, col=km.out$cluster, cex=2, pch=1, lwd=2)
+points(x, col=which, pch=19) # color mismatch
+points(x, col=c(4,3,2,1)[which], pch=19)
+```
+
+The plot shows two misclassified points.
+
+# Hierarchical clustering
+
+```{r}
+hc.complete <- hclust(dist(x), method='complete')
+plot(hc.complete)
+hc.single <- hclust(dist(x), method='single')
+plot(hc.single)
+hc.average <- hclust(dist(x), method='average')
+plot(hc.average)
+```
+
+Comparing output of hierarchical clustering to the actual clusters:
+
+```{r}
+hc.cut <- cutree(hc.complete, k=4)
+table(hc.cut, which) # there seem to be 3 obs that were wrongly clustered.
+plot(hc.complete, labels=which)
+```
+
