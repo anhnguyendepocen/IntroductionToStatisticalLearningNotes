@@ -27,19 +27,20 @@ shinyServer(function(input, output) {
     # make data.frame of curve data:
     curves <- adply(seq(0,1,length=201), 1, my.func)
     # make a plot of the data:
-    output$plot.model.curves <- renderPlot(height=200,{
+    output$plot.model.curves <- renderPlot({
         ggplot(curves, aes(x=sp)) +
             geom_line(aes(y=rmse.train),color='blue') +
             geom_line(aes(y=rmse.test),color='red') +
             xlab("Smoothing parameter") + ylab("RMSE") +
-            ggtitle("Model RMSE as Function of Smoothing Parameter")
+            ggtitle("RMSE as Function of S.P.") +
+            ylim(0,1.4)
         })
 
     ss <- reactive({ smooth.spline(df$x[!df$test], df$y[!df$test], spar=input$sp) })
     curvy <- reactive({ predict(ss(), seq(from=from, to=to, length=100)) })
     pred <- reactive({predict(ss(), df$x)})
 
-    output$plot.function.with.fit <- renderPlot(height=200,{
+    output$plot.function.with.fit <- renderPlot({
         ggplot(df, aes(x,y)) + geom_point(aes(col=test), size=2) +
             scale_color_manual(values=c('blue', 'red')) + ylim(-1.5, 1.5) +
             guides(color=F) + annotate(geom='line', x=curvy()$x, y=curvy()$y, color='blue',size=1) +
@@ -57,17 +58,19 @@ shinyServer(function(input, output) {
         data.frame(x=1:floor(n/3), test=sort(abs(df$y[df$test] - pred()$y[df$test])))
     })
     
-    output$plot.resid.train <- renderPlot(height=150,{
+    output$plot.resid.train <- renderPlot({
         ggplot(resids.train(), aes(x, train)) +
             geom_segment(aes(xend=x, yend=0),color='blue') +
-            ggtitle("Training residuals") +
-            ylim(0,3)
+            ggtitle("Training residuals") + ylab('') + xlab('') + ylim(0,1.4) +
+            theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(),
+                  axis.text.x=element_blank(), axis.ticks.x=element_blank())
     })
     
-    output$plot.resid.test <- renderPlot(height=150,{
+    output$plot.resid.test <- renderPlot({
         ggplot(resids.test(), aes(x, test)) +
             geom_segment(aes(xend=x, yend=0),color='red') +
-            ggtitle("Test residuals") +
-            ylim(0,3)
+            ggtitle("Test residuals") + ylab('') + xlab('') + ylim(0,1.4) +
+            theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(),
+                  axis.text.x=element_blank(), axis.ticks.x=element_blank())
     })
 })

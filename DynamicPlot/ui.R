@@ -3,10 +3,22 @@ shinyUI(fluidPage(
     
     titlePanel("Basic Model-Fitting Demo"),
     
+    fluidRow(p(strong("See below for documentation"))),
+    
+    fluidRow(
+        column(width=4,sliderInput("sp", label=h3("smoothing parameter (S.P.)"), min=0, max=1, value=.5)),
+        column(width=8,plotOutput("plot.function.with.fit", height="300px"))
+    ),
+    
+    fluidRow(column(width=4,plotOutput("plot.model.curves", height="250px")),
+             column(width=5,plotOutput("plot.resid.train", height="240px")),
+             column(width=3,plotOutput("plot.resid.test", height="240px"))),
+    
     fluidRow(
         column(width=12,
                p("This shiny app demonstrates a few basic concepts of machine learning."),
-               withMathJax(p("The data below have been simulated from the sine curve shown in black, 
+               withMathJax(p("The data in the top right graph have been simulated from
+                 the sine curve shown in black, 
                  \\(0 \\le x \\le \\pi \\).
                  We are pretending that we don't know it's a sine curve, and trying to discover
                  the relationship between the variables by fitting a spline
@@ -25,15 +37,6 @@ shinyUI(fluidPage(
                  ". A decent model is somewhere in between, near ",
                  strong("where the test error curve reaches its minimum"), ".")
                
-               )
-    ),
-    
-    fluidRow(
-        column(width=3,sliderInput("sp", label=h3("smoothing parameter"), min=0, max=1, value=.5)),
-        column(width=9,plotOutput("plot.function.with.fit"))
-    ),
-    
-    fluidRow(column(width=6,plotOutput("plot.model.curves")),
-             column(width=4,plotOutput("plot.resid.train")),
-             column(width=2,plotOutput("plot.resid.test")))
+        )
+    )
 ))
