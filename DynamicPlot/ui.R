@@ -10,6 +10,8 @@ shinyUI(fluidPage(
                  We are pretending that we don't know it's a sine curve, and trying to discover
                  the relationship between the variables by fitting a spline
                  curve (shown in blue) using R's ", code("smooth.spline"), " function. ",
+                 strong("Play with the slider, trying to minimize the test RMSE."),
+                 "(RMSE = the square root of the average of the squared errors.)",
                            a(href='#explanation',"See below for more documentation.")))),
     
     fluidRow(
@@ -20,7 +22,7 @@ shinyUI(fluidPage(
                                 "sin(2x)"=3,
                                 "sin(4x)"=4),selected=2),
                sliderInput("sp", label="Smoothing Parameter (S.P.)", min=0, max=1, value=.5),
-               actionButton(inputId='resetSP',label='Reset to optimal S.P. (minimizing test RMSE)')),
+               actionButton(inputId='resetSP',label='Set S.P. to optimal value')),
         column(width=8,plotOutput("plot.function.with.fit", height="370px"))
     ),
     

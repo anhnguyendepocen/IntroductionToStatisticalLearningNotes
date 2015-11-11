@@ -22,21 +22,23 @@ shinyServer(function(input, output, clientData, session) {
     
     basic.function <- reactive({ f()(x) })
     
-    test <- rep(FALSE, times=n)
-    test[sample(n, size=floor(n/3))] <- T
-    df <- reactive({ data.frame(x, y = f()(x) + rnorm(n, sd=sd.eps), test) })
+    test.set <- rep(FALSE, times=n)
+    test.set[sample(n, size=floor(n/3))] <- TRUE
+    
+    df <- reactive({ data.frame(x, y = f()(x) + rnorm(n, sd=sd.eps), test.set ) })
     
     
     my.func <- reactive({
         function(sp) {
-            ss <- smooth.spline( df()$x[!test], df()$y[!test], spar=sp)
+            ss <- smooth.spline( df()$x[!test.set], df()$y[!test.set], spar=sp)
                 data.frame(sp        = sp,
-                   rmse.train = sqrt(mean((df()$y[!test] - predict(ss, df()$x[!test])$y)^2)),
-                   rmse.test  = sqrt(mean((df()$y[test] - predict(ss, df()$x[test])$y)^2)))
+                   rmse.train = sqrt(mean((df()$y[!test.set] - predict(ss, df()$x[!test.set])$y)^2)),
+                   rmse.test  = sqrt(mean((df()$y[test.set] - predict(ss, df()$x[test.set])$y)^2)))
         }
     })
     
-    # make data.frame of curve data:
+    # make data.frame of curve data. This tries a lot of different smoothing
+    # parameters and collects the resulting training and test RMSE in a data frame.
     curves <- reactive({ adply(seq(0,1,length=201), 1, my.func() ) })
     # make a plot of the data:
     output$plot.model.curves <- renderPlot({
@@ -55,7 +57,7 @@ shinyServer(function(input, output, clientData, session) {
     pred <- reactive({predict(ss(), df()$x)})
 
     output$plot.function.with.fit <- renderPlot({
-        ggplot(df(), aes(x,y)) + geom_point(aes(col=test), size=2) +
+    ggplot(df(), aes(x,y)) + geom_point(aes(color=test.set), size=2) +
             scale_color_manual(values=c('blue', 'red')) + ylim(-1.5, 1.5) +
             guides(color=FALSE) + annotate(geom='line', x=curvy()$x, y=curvy()$y, color='blue',size=1) +
             annotate(geom='segment', x=pred()$x[!df()$test], xend=pred()$x[!df()$test],
