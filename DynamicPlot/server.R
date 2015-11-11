@@ -2,17 +2,24 @@ library(shiny)
 library(ggplot2)
 theme_set(theme_minimal())
 library(plyr)
+n <- 150
+from <- 0
+to <- 2*pi
+sd.eps <- .3
+x <- seq(from=from, to=to, length=n)
+
 shinyServer(function(input, output) {
     
     # set.seed(1000)
+    # f <- reactive({
+        # function(x) { switch(input$functionchoice, sin(.5*x), sin(x), sin(2*x), sin(4*x)) }
+        
+    # })
     f <- function(x) { sin(x) }
-    n <- 150
-    from <- 0
-    to <- 4*pi
-    sd.eps <- .3
-    x <- seq(from=from, to=to, length=n)
+    
     basic.function <- f(x)
-    test <- rep(F, times=n)
+    
+    test <- rep(FALSE, times=n)
     test[sample(n, size=floor(n/3))] <- T
     df <- data.frame(x, y = f(x) + rnorm(n, sd=sd.eps), test)
     
@@ -43,7 +50,7 @@ shinyServer(function(input, output) {
     output$plot.function.with.fit <- renderPlot({
         ggplot(df, aes(x,y)) + geom_point(aes(col=test), size=2) +
             scale_color_manual(values=c('blue', 'red')) + ylim(-1.5, 1.5) +
-            guides(color=F) + annotate(geom='line', x=curvy()$x, y=curvy()$y, color='blue',size=1) +
+            guides(color=FALSE) + annotate(geom='line', x=curvy()$x, y=curvy()$y, color='blue',size=1) +
             annotate(geom='segment', x=pred()$x[!df$test], xend=pred()$x[!df$test],
                      y=df$y[!df$test], yend=pred()$y[!df$test], col='blue') +
             annotate(geom='segment', x=pred()$x[df$test], xend=pred()$x[df$test],
@@ -58,9 +65,13 @@ shinyServer(function(input, output) {
         data.frame(x=1:floor(n/3), test=sort(abs(df$y[df$test] - pred()$y[df$test])))
     })
     
+    rmse.train <- reactive({ sqrt(mean(resids.train()$train^2)) })
+    rmse.test <- reactive({ sqrt(mean(resids.test()$test^2)) })
+    
     output$plot.resid.train <- renderPlot({
         ggplot(resids.train(), aes(x, train)) +
             geom_segment(aes(xend=x, yend=0),color='blue') +
+            geom_hline(yintercept=rmse.train()) +
             ggtitle("Training residuals") + ylab('') + xlab('') + ylim(0,1.4) +
             theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(),
                   axis.text.x=element_blank(), axis.ticks.x=element_blank())
@@ -69,6 +80,7 @@ shinyServer(function(input, output) {
     output$plot.resid.test <- renderPlot({
         ggplot(resids.test(), aes(x, test)) +
             geom_segment(aes(xend=x, yend=0),color='red') +
+            geom_hline(yintercept=rmse.test()) +
             ggtitle("Test residuals") + ylab('') + xlab('') + ylim(0,1.4) +
             theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(),
                   axis.text.x=element_blank(), axis.ticks.x=element_blank())

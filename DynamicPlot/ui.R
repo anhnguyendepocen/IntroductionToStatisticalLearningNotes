@@ -3,26 +3,29 @@ shinyUI(fluidPage(
     
     titlePanel("Basic Model-Fitting Demo"),
     
-    fluidRow(p(strong("See below for documentation"))),
+    fluidRow(p("This shiny app demonstrates a few basic concepts of machine learning."),
+             withMathJax(p("The data in the top right graph have been simulated from
+                 the sine curve shown in black, 
+                 \\(0 \\le x \\le 2 \\pi \\).
+                 We are pretending that we don't know it's a sine curve, and trying to discover
+                 the relationship between the variables by fitting a spline
+                 curve (shown in blue) using R's ", code("smooth.spline"), " function. ",
+                           a(href='#explanation',"See below for more documentation.")))),
     
     fluidRow(
-        column(width=4,sliderInput("sp", label=h3("smoothing parameter (S.P.)"), min=0, max=1, value=.5)),
-        column(width=8,plotOutput("plot.function.with.fit", height="300px"))
+        column(width=4,
+               selectInput("functionchoice", "Function",
+                           list("sin(x/2)"=1, "sin(x)"=2, "sin(2x)"=3, "sin(4x)"=4),"sin(x)"),
+               sliderInput("sp", label=h3("smoothing param. (S.P.)"), min=0, max=1, value=.5)),
+        column(width=8,plotOutput("plot.function.with.fit", height="370px"))
     ),
     
     fluidRow(column(width=4,plotOutput("plot.model.curves", height="250px")),
-             column(width=5,plotOutput("plot.resid.train", height="240px")),
-             column(width=3,plotOutput("plot.resid.test", height="240px"))),
+             column(width=5,plotOutput("plot.resid.train", height="242px")),
+             column(width=3,plotOutput("plot.resid.test", height="242px"))),
     
     fluidRow(
-        column(width=12,
-               p("This shiny app demonstrates a few basic concepts of machine learning."),
-               withMathJax(p("The data in the top right graph have been simulated from
-                 the sine curve shown in black, 
-                 \\(0 \\le x \\le \\pi \\).
-                 We are pretending that we don't know it's a sine curve, and trying to discover
-                 the relationship between the variables by fitting a spline
-                 curve using R's ", code("smooth.spline"), " function.")),
+        column(width=12,a(name='explanation',h2("Explanation")),
                p("The data have been randomly partitioned into a ", strong("training set"), " (blue),
                  and a ", strong("test set"), " (red). The spline curve is
                  fit only to the training points."),
