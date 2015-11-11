@@ -15,7 +15,10 @@ shinyUI(fluidPage(
     fluidRow(
         column(width=4,
                selectInput("functionchoice", "Function",
-                           list("sin(x/2)"=1, "sin(x)"=2, "sin(2x)"=3, "sin(4x)"=4),"sin(x)"),
+                           list("sin(x/2)"=1,
+                                "sin(x)"=2,
+                                "sin(2x)"=3,
+                                "sin(4x)"=4),selected=2),
                sliderInput("sp", label=h3("smoothing param. (S.P.)"), min=0, max=1, value=.5)),
         column(width=8,plotOutput("plot.function.with.fit", height="370px"))
     ),
