@@ -19,7 +19,8 @@ shinyUI(fluidPage(
                                 "sin(x)"=2,
                                 "sin(2x)"=3,
                                 "sin(4x)"=4),selected=2),
-               sliderInput("sp", label=h3("smoothing param. (S.P.)"), min=0, max=1, value=.5)),
+               sliderInput("sp", label="Smoothing Parameter (S.P.)", min=0, max=1, value=.5),
+               actionButton(inputId='resetSP',label='Reset to optimal S.P. (minimizing test RMSE)')),
         column(width=8,plotOutput("plot.function.with.fit", height="370px"))
     ),
     
